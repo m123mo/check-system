@@ -6,101 +6,68 @@
     <style>
         :root { --neon: #00f2ff; --danger: #ff003c; --bg: #050505; }
         body { background: var(--bg); color: #fff; font-family: 'Consolas', monospace; margin: 0; overflow: hidden; }
-        .header { background: #111; padding: 15px; border-bottom: 2px solid var(--neon); display: flex; gap: 10px; box-shadow: 0 0 15px rgba(0,242,255,0.3); }
-        input { flex: 1; background: #000; border: 1px solid var(--neon); padding: 12px; color: var(--neon); outline: none; border-radius: 4px; }
-        button { background: var(--neon); color: #000; border: none; padding: 12px 25px; font-weight: 900; cursor: pointer; border-radius: 4px; }
+        .header { background: #111; padding: 15px; border-bottom: 2px solid var(--neon); display: flex; gap: 10px; }
+        input { flex: 1; background: #000; border: 1px solid var(--neon); padding: 12px; color: var(--neon); outline: none; }
+        button { background: var(--neon); color: #000; border: none; padding: 12px 25px; font-weight: 900; cursor: pointer; }
         .main-container { display: grid; grid-template-columns: 350px 1fr; height: calc(100vh - 75px); }
         .side-panel { background: #0a0a0a; border-left: 1px solid #333; padding: 15px; overflow-y: auto; }
         .viewport { background: #fff; position: relative; }
-        iframe { width: 100%; height: 100%; border: none; background: white; }
-        .badge { padding: 5px; font-size: 11px; font-weight: bold; text-transform: uppercase; border: 1px solid; margin-bottom: 10px; display: block; text-align: center; }
-        pre { background: #000; color: #0f0; padding: 10px; border: 1px solid #222; max-height: 400px; overflow: auto; font-size: 11px; white-space: pre-wrap; }
+        iframe { width: 100%; height: 100%; border: none; }
+        .badge { padding: 5px; font-size: 11px; font-weight: bold; border: 1px solid; margin-bottom: 10px; display: block; text-align: center; }
+        pre { background: #000; color: #0f0; padding: 10px; border: 1px solid #222; max-height: 400px; overflow: auto; font-size: 11px; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <input type="text" id="targetUrl" placeholder="أدخل الرابط كاملاً (e.g., https://www.wikipedia.org)">
+    <input type="text" id="targetUrl" placeholder="أدخل الرابط كاملاً">
     <button onclick="startInfiltration()">EXECUTE SCAN</button>
 </div>
 
 <div class="main-container">
     <div class="side-panel">
         <div id="status" class="badge" style="color: #aaa; border-color: #444;">IDLE_WAITING</div>
-        <div style="color: var(--neon); margin: 10px 0;">[ ANALYTICS ]</div>
-        <div id="stats" style="font-size: 12px; color: #888; line-height: 1.6;">
-            Scripts: 0 | Images: 0 | Links: 0
-        </div>
-        <hr style="border:0; border-top:1px solid #222; margin: 15px 0;">
-        <div style="color: var(--neon); margin: 10px 0;">[ SOURCE_DUMP ]</div>
+        <div id="stats" style="font-size: 12px; color: #888;">Scripts: 0 | Images: 0 | Links: 0</div>
         <pre id="rawSource">// No data</pre>
     </div>
-    <div class="viewport" id="vPort">
-        <div style="color: #888; text-align: center; margin-top: 100px;">إدخال الرابط ثم الضغط على الزر للبدء</div>
-    </div>
+    <div class="viewport" id="vPort"></div>
 </div>
 
 <script>
 async function startInfiltration() {
     let url = document.getElementById('targetUrl').value.trim();
-    const vPort = document.getElementById('vPort');
-    const status = document.getElementById('status');
-    const rawSource = document.getElementById('rawSource');
+    if(!url) return alert("أدخل الرابط!");
 
-    if(!url) return alert("أدخل الرابط أولاً!");
-    if(!url.startsWith('http')) url = 'https://' + url;
-
-    status.innerText = "BYPASSING_CORS...";
-    status.style.color = "#ffaa00";
-    status.style.borderColor = "#ffaa00";
-
+    document.getElementById('status').innerText = "PYTHON_SCANNING...";
+    
     try {
-        // استخدام محرك كسر القيود AllOrigins
-        const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+        // نرسل الطلب لسيرفر البايثون (Flask)
+        const response = await fetch('/api/scan', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({url: url})
+        });
+
         const data = await response.json();
-        let html = data.contents;
-
-        if(!html) throw new Error("EMPTY_RESPONSE");
-
-        // --- المعالجة العميقة للكود (Deep De-Protection) ---
-        const urlObj = new URL(url);
-        const baseUrl = `${urlObj.protocol}//${urlObj.hostname}`;
-
-        // 1. حقن الوسم الأساسي لإصلاح كافة الروابط النسبية فوراً
-        const baseTag = `<base href="${baseUrl}/">`;
-        html = html.replace(/<head>/i, `<head>${baseTag}`);
-
-        // 2. إبطال مفعول الـ Frame Busters برمجياً
-        html = html.replace(/if\s*\(top\s*!==?\s*self\)/gi, "if(false)");
-        html = html.replace(/window\.top\s*!==\s*window\.self/gi, "false");
         
-        // 3. تحليل البيانات السريع
-        const scripts = (html.match(/<script/g) || []).length;
-        const imgs = (html.match(/<img/g) || []).length;
-        const links = (html.match(/href=/g) || []).length;
-        document.getElementById('stats').innerHTML = `Scripts: ${scripts} | Images: ${imgs} | Links: ${links}`;
-
-        // عرض الكود
-        rawSource.innerText = html;
-
-        // الحقن في البيئة المعزولة
-        vPort.innerHTML = `<iframe id="reconFrame" sandbox="allow-scripts allow-same-origin"></iframe>`;
-        const frame = document.getElementById('reconFrame');
-        const doc = frame.contentWindow.document;
+        document.getElementById('stats').innerHTML = 
+            `Scripts: ${data.stats.scripts} | Images: ${data.stats.images} | Links: ${data.stats.links}`;
+        document.getElementById('rawSource').innerText = data.html;
+        
+        const vPort = document.getElementById('vPort');
+        vPort.innerHTML = `<iframe id="reconFrame"></iframe>`;
+        const doc = document.getElementById('reconFrame').contentWindow.document;
         doc.open();
-        doc.write(html);
+        // حقن base tag ليتم تحميل الصور بشكل صحيح من السيرفر الأصلي
+        doc.write(`<base href="${data.base_url}/">` + data.html);
         doc.close();
 
-        status.innerText = "SUCCESS_ISOLATED";
-        status.style.color = "#00ff41";
-        status.style.borderColor = "#00ff41";
-
+        document.getElementById('status').innerText = "SUCCESS";
     } catch (e) {
-        status.innerText = "CRITICAL_FAILURE";
-        status.style.color = "red";
-        vPort.innerHTML = `<div style="color:red; padding:20px;">فشل الاتصال: ${e.message}<br>تأكد من الرابط أو جرب موقعاً آخر.</div>`;
+        document.getElementById('status').innerText = "ERROR";
     }
 }
 </script>
 </body>
 </html>
+
